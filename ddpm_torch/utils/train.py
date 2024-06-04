@@ -11,6 +11,7 @@ import weakref
 from tqdm import tqdm
 from functools import partial
 from contextlib import nullcontext
+import wandb
 
 
 class DummyScheduler:
@@ -206,6 +207,7 @@ class Trainer:
             self.start_epoch, self.epochs = 0, 1
 
         global_steps = 0
+        wandb.watch(models=self.model)
         for e in range(self.start_epoch, self.epochs):
             self.stats.reset()
             self.model.train()
@@ -226,6 +228,14 @@ class Trainer:
                     results.update(self.current_stats)
                     if self.dry_run and not global_steps % self.num_accum:
                         break
+
+            wandb.log(
+                {
+                    "train_loss": self.current_stats["loss"],
+                    "learning_rate": self.scheduler.get_last_lr()[0],
+                    "epoch": e,
+                }
+            )
 
             if not (e + 1) % self.image_intv and self.num_samples and image_dir:
                 self.model.eval()

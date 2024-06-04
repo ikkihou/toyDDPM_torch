@@ -1,6 +1,7 @@
 import json
 import os
 import tempfile
+import wandb
 import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
@@ -11,6 +12,14 @@ from functools import partial
 from torch.distributed.elastic.multiprocessing import errors
 from torch.nn.parallel import DistributedDataParallel as DDP  # noqa
 from torch.optim import Adam, lr_scheduler
+
+import gc
+
+
+def clear_mem():
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
 
 def train(rank=0, args=None, temp_dir=""):
@@ -25,7 +34,11 @@ def train(rank=0, args=None, temp_dir=""):
         args.config_path = os.path.join(args.config_dir, args.dataset + ".json")
     with open(args.config_path, "r") as f:
         meta_config = json.load(f)
-    exp_name = os.path.basename(args.config_path)[:-5]
+    exp_name = (
+        os.path.basename(args.config_path)[:-5]
+        if args.exp_name is None
+        else args.exp_name
+    )
 
     # dataset basic info
     dataset = meta_config.get("dataset", args.dataset)
@@ -38,6 +51,7 @@ def train(rank=0, args=None, temp_dir=""):
     seed_all(seed)
 
     # extract training-specific hyperparameters
+    # 以config配置文件中的参数优先, 命令行解析参数为次
     gettr = partial(get_param, obj_1=meta_config.get("train", {}), obj_2=args)
     train_config = ConfigDict(
         **{
@@ -63,6 +77,7 @@ def train(rank=0, args=None, temp_dir=""):
     eval_device = torch.device(args.eval_device)
 
     # extract diffusion-specific hyperparameters
+    # 以config配置文件中的参数优先, 命令行解析参数为次
     getdif = partial(get_param, obj_1=meta_config.get("diffusion", {}), obj_2=args)
     diffusion_config = ConfigDict(
         **{
@@ -78,6 +93,10 @@ def train(rank=0, args=None, temp_dir=""):
             )
         }
     )
+
+    meta_config.update(train=train_config)
+    meta_config.update(diffusion=diffusion_config)
+    wandb.init(project="beta_test", group="train", config=meta_config)
 
     betas = get_beta_schedule(
         diffusion_config.beta_schedule,
@@ -315,7 +334,7 @@ def main():
     )
     parser.add_argument("--dataset", choices=DATASET_DICT.keys(), default="cifar10")
     parser.add_argument(
-        "--root", default="~/datasets", type=str, help="root directory of datasets"
+        "--root", default="./datasets", type=str, help="root directory of datasets"
     )
     parser.add_argument(
         "--epochs", default=50, type=int, help="total number of training epochs"
@@ -338,7 +357,14 @@ def main():
     )
     parser.add_argument(
         "--beta-schedule",
-        choices=["quad", "linear", "warmup10", "warmup50", "jsd"],
+        choices=[
+            "quad",
+            "linear",
+            "warmup10",
+            "warmup50",
+            "jsd",
+            "stairs",
+        ],
         default="linear",
     )
     parser.add_argument("--beta-start", default=0.0001, type=float)
@@ -370,7 +396,7 @@ def main():
     parser.add_argument("--chkpt-dir", default="./chkpts", type=str)
     parser.add_argument("--chkpt-name", default="", type=str)
     parser.add_argument(
-        "--chkpt-intv", default=120, type=int, help="frequency of saving a checkpoint"
+        "--chkpt-intv", default=100, type=int, help="frequency of saving a checkpoint"
     )
     parser.add_argument("--seed", default=1234, type=int, help="random seed")
     parser.add_argument(
@@ -445,4 +471,5 @@ def main():
 
 
 if __name__ == "__main__":
+    clear_mem()
     main()

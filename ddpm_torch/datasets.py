@@ -72,7 +72,7 @@ class CIFAR10(tvds.CIFAR10):
             root=root,
             train=split != "test",
             transform=transform or self._transform,
-            download=False,
+            download=True,
         )
 
     def __getitem__(self, index):
@@ -112,7 +112,10 @@ class CelebA(tvds.VisionDataset):
     test_size = 19962
 
     def __init__(self, root, split, transform=None):
-        super().__init__(root, transform=transform or self._transform)
+        super().__init__(
+            root,
+            transform=transform or self._transform,
+        )
         self.split = split
         split_map = {
             "train": 0,
@@ -223,7 +226,7 @@ class CelebA_HQ(tvds.VisionDataset):
         return len(self.filename)
 
 
-ROOT = os.path.expanduser("~/datasets")
+ROOT = os.path.expanduser("./datasets")
 
 
 def train_val_split(n_train, val_size, random_seed=None):

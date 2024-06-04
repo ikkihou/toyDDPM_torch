@@ -103,7 +103,9 @@ class GaussianDiffusion:
         }[self.model_var_type]
 
     @staticmethod
-    def _extract(arr, t, x, dtype=torch.float32, device=torch.device("cpu"), ndim=4):
+    def _extract(
+        arr, t, x, dtype=torch.float32, device=torch.device("cpu"), ndim=4
+    ):  ## 提取特定时间步的样本
         if x is not None:
             dtype = x.dtype
             device = x.device
@@ -117,7 +119,7 @@ class GaussianDiffusion:
         logvar = self._extract(torch.log(1 - self.alphas_bar), t, x_0)
         return mean, var, logvar
 
-    def q_sample(self, x_0, t, noise=None):
+    def q_sample(self, x_0, t, noise=None):  ## q(xt|x0)
         if noise is None:
             noise = torch.randn_like(x_0)
         coef1 = self._extract(self.sqrt_alphas_bar, t, x_0)
