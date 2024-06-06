@@ -14,6 +14,8 @@ from torch.nn.parallel import DistributedDataParallel as DDP  # noqa
 from torch.optim import Adam, lr_scheduler
 
 import gc
+import logging
+from ddpm_torch.utils import setlogger
 
 
 def clear_mem():
@@ -25,9 +27,9 @@ def clear_mem():
 def train(rank=0, args=None, temp_dir=""):
     distributed = args.distributed
 
-    def logger(msg, **kwargs):
-        if not distributed or dist.get_rank() == 0:
-            print(msg, **kwargs)
+    # def logger(msg, **kwargs):
+    #     if not distributed or dist.get_rank() == 0:
+    #         print(msg, **kwargs)
 
     root = os.path.expanduser(args.root)
     if args.config_path is None:
@@ -40,7 +42,16 @@ def train(rank=0, args=None, temp_dir=""):
         else args.exp_name
     )
 
-    # dataset basic info
+    chkpt_dir = os.path.join(args.chkpt_dir, exp_name)
+    chkpt_path = os.path.join(chkpt_dir, args.chkpt_name or f"{exp_name}.pt")
+    chkpt_intv = args.chkpt_intv
+    setlogger(os.path.join(chkpt_dir, "train.log"))
+    logging.info(f"Checkpoint will be saved to {os.path.abspath(chkpt_path)}", end=" ")
+    logging.info(f"every {chkpt_intv} epoch(s)")
+
+    image_dir = os.path.join(args.image_dir, "train", exp_name)
+
+    # ------------- dataset basic info ----------------
     dataset = meta_config.get("dataset", args.dataset)
     in_channels = DATASET_INFO[dataset]["channels"]
     image_res = DATASET_INFO[dataset]["resolution"]
@@ -163,7 +174,7 @@ def train(rank=0, args=None, temp_dir=""):
             args.num_gpus = world_size or local_world_size
             os.environ["WORLD_SIZE"] = os.environ.get("WORLD_SIZE", str(world_size))
 
-        logger(f"Using distributed training with {args.num_gpus} GPU(s).")
+        logging.info(f"Using distributed training with {args.num_gpus} GPU(s).")
         torch.cuda.set_device(local_rank)
         _model.cuda()
         model = DDP(
@@ -180,8 +191,8 @@ def train(rank=0, args=None, temp_dir=""):
 
     is_leader = rank == 0  # rank 0: leader in the process group
 
-    logger(f"Dataset: {dataset}")
-    logger(
+    logging.info(f"Dataset: {dataset}")
+    logging.info(
         f"Effective batch-size is {train_config.batch_size} * {args.num_accum}"
         f" = {train_config.batch_size * args.num_accum}."
     )
@@ -220,22 +231,9 @@ def train(rank=0, args=None, temp_dir=""):
     )  # drop_last to have a static input shape; num_workers > 0 to enable asynchronous data loading
 
     if args.dry_run:
-        logger("This is a dry run.")
+        logging.info("This is a dry run.")
         args.chkpt_intv = 1
         args.image_intv = 1
-
-    chkpt_dir = os.path.join(args.chkpt_dir, exp_name)
-    chkpt_path = os.path.join(chkpt_dir, args.chkpt_name or f"{exp_name}.pt")
-    chkpt_intv = args.chkpt_intv
-    logger(f"Checkpoint will be saved to {os.path.abspath(chkpt_path)}", end=" ")
-    logger(f"every {chkpt_intv} epoch(s)")
-
-    image_dir = os.path.join(args.image_dir, "train", exp_name)
-    logger(
-        f"Generated images (x{train_config.num_samples}) will be saved to {os.path.abspath(image_dir)}",
-        end=" ",
-    )
-    logger(f"every {train_config.image_intv} epoch(s)")
 
     if is_leader:
         model_config["block_size"] = block_size
@@ -246,11 +244,15 @@ def train(rank=0, args=None, temp_dir=""):
             "model": model_config,
             "train": train_config,
         }
-        timestamp = datetime.now().strftime("%Y-%m-%dT%H%M%S%f")
-
+        logging.info(
+            f"Generated images (x{train_config.num_samples}) will be saved to {os.path.abspath(image_dir)}",
+            end=" ",
+        )
+        logging.info(f"every {train_config.image_intv} epoch(s)")
         if not os.path.exists(chkpt_dir):
             os.makedirs(chkpt_dir)
         # keep a record of hyperparameter settings used for this experiment run
+        timestamp = datetime.now().strftime("%Y-%m-%dT%H%M%S%f")
         with open(os.path.join(chkpt_dir, f"exp_{timestamp}.info"), "w") as f:
             json.dump(hps, f, indent=2)
         if not os.path.exists(image_dir):
@@ -309,15 +311,15 @@ def train(rank=0, args=None, temp_dir=""):
             _chkpt_path = args.chkpt_path or chkpt_path
             trainer.load_checkpoint(_chkpt_path, map_location=map_location)
         except FileNotFoundError:
-            logger("Checkpoint file does not exist!")
-            logger("Starting from scratch...")
+            logging.info("Checkpoint file does not exist!")
+            logging.info("Starting from scratch...")
 
     # use cudnn benchmarking algorithm to select the best conv algorithm
     if torch.backends.cudnn.is_available():  # noqa
         torch.backends.cudnn.benchmark = True  # noqa
-        logger(f"cuDNN benchmark: ON")
+        logging.info(f"cuDNN benchmark: ON")
 
-    logger("Training starts...", flush=True)
+    logging.info("Training starts...", flush=True)
     trainer.train(evaluator, chkpt_path=chkpt_path, image_dir=image_dir)
 
 

@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import random
 import torch
+import logging
 
 mpl.rcParams["figure.dpi"] = 144
 
@@ -52,6 +53,7 @@ def get_param(param, obj_1, obj_2):
             return getattr(obj, attr)
         else:
             NotImplementedError("Not supported!")
+
     try:
         param = get(obj_1, param)
     except (KeyError, AttributeError):
@@ -99,3 +101,17 @@ class ConfigDict(dict):
 
     def __getattr__(self, name):
         return self.get(name, None)
+
+
+def setlogger(filename):
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+    logFormatter = logging.Formatter(fmt="%(asctime)s - %(levelname)s - %(message)s")
+
+    fileHandler = logging.FileHandler(filename)
+    fileHandler.setFormatter(logFormatter)
+    logger.addHandler(fileHandler)
+
+    consoleHandler = logging.StreamHandler()
+    consoleHandler.setFormatter(logFormatter)
+    logger.addHandler(consoleHandler)
