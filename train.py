@@ -45,9 +45,14 @@ def train(rank=0, args=None, temp_dir=""):
     chkpt_dir = os.path.join(args.chkpt_dir, exp_name)
     chkpt_path = os.path.join(chkpt_dir, args.chkpt_name or f"{exp_name}.pt")
     chkpt_intv = args.chkpt_intv
-    setlogger(os.path.join(chkpt_dir, "train.log"))
-    logging.info(f"Checkpoint will be saved to {os.path.abspath(chkpt_path)}", end=" ")
-    logging.info(f"every {chkpt_intv} epoch(s)")
+
+    if not os.path.exists(chkpt_dir):
+        os.makedirs(chkpt_dir)
+
+    logging = setlogger(os.path.join(chkpt_dir, "train.log"))
+    logging.info(
+        f"Checkpoint will be saved to {os.path.abspath(chkpt_path)} every {chkpt_intv} epoch(s)"
+    )
 
     image_dir = os.path.join(args.image_dir, "train", exp_name)
 
@@ -245,12 +250,8 @@ def train(rank=0, args=None, temp_dir=""):
             "train": train_config,
         }
         logging.info(
-            f"Generated images (x{train_config.num_samples}) will be saved to {os.path.abspath(image_dir)}",
-            end=" ",
+            f"Generated images (x{train_config.num_samples}) will be saved to {os.path.abspath(image_dir)} every {train_config.image_intv} epoch(s)"
         )
-        logging.info(f"every {train_config.image_intv} epoch(s)")
-        if not os.path.exists(chkpt_dir):
-            os.makedirs(chkpt_dir)
         # keep a record of hyperparameter settings used for this experiment run
         timestamp = datetime.now().strftime("%Y-%m-%dT%H%M%S%f")
         with open(os.path.join(chkpt_dir, f"exp_{timestamp}.info"), "w") as f:
@@ -319,7 +320,7 @@ def train(rank=0, args=None, temp_dir=""):
         torch.backends.cudnn.benchmark = True  # noqa
         logging.info(f"cuDNN benchmark: ON")
 
-    logging.info("Training starts...", flush=True)
+    logging.info("Training starts...")
     trainer.train(evaluator, chkpt_path=chkpt_path, image_dir=image_dir)
 
 
@@ -339,7 +340,7 @@ def main():
         "--root", default="./datasets", type=str, help="root directory of datasets"
     )
     parser.add_argument(
-        "--epochs", default=50, type=int, help="total number of training epochs"
+        "--epochs", default=500, type=int, help="total number of training epochs"
     )
     parser.add_argument("--lr", default=0.0002, type=float, help="learning rate")
     parser.add_argument("--beta1", default=0.9, type=float, help="beta_1 in Adam")
@@ -398,7 +399,7 @@ def main():
     parser.add_argument("--chkpt-dir", default="./chkpts", type=str)
     parser.add_argument("--chkpt-name", default="", type=str)
     parser.add_argument(
-        "--chkpt-intv", default=100, type=int, help="frequency of saving a checkpoint"
+        "--chkpt-intv", default=250, type=int, help="frequency of saving a checkpoint"
     )
     parser.add_argument("--seed", default=1234, type=int, help="random seed")
     parser.add_argument(

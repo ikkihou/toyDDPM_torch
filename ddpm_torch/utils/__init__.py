@@ -103,8 +103,22 @@ class ConfigDict(dict):
         return self.get(name, None)
 
 
+# def setlogger(filename):
+#     logger = logging.getLogger()
+#     logger.setLevel(logging.INFO)
+#     logFormatter = logging.Formatter(fmt="%(asctime)s - %(levelname)s - %(message)s")
+
+#     fileHandler = logging.FileHandler(filename)
+#     fileHandler.setFormatter(logFormatter)
+#     logger.addHandler(fileHandler)
+
+#     consoleHandler = logging.StreamHandler()
+#     consoleHandler.setFormatter(logFormatter)
+#     logger.addHandler(consoleHandler)
+
+
 def setlogger(filename):
-    logger = logging.getLogger()
+    logger = logging.getLogger("ddpm_logger")
     logger.setLevel(logging.INFO)
     logFormatter = logging.Formatter(fmt="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -112,6 +126,11 @@ def setlogger(filename):
     fileHandler.setFormatter(logFormatter)
     logger.addHandler(fileHandler)
 
+    consoleLogger = logging.getLogger("console_logger")  # 新建一个控制台日志记录器
+    consoleLogger.setLevel(logging.INFO)
+
     consoleHandler = logging.StreamHandler()
     consoleHandler.setFormatter(logFormatter)
-    logger.addHandler(consoleHandler)
+    consoleLogger.addHandler(consoleHandler)
+
+    return logger

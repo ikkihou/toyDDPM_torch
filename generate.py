@@ -39,7 +39,8 @@ def generate(rank, args, counter=0):
     input_shape = (in_channels, image_res, image_res)
 
     diffusion_kwargs = meta_config["diffusion"]
-    beta_schedule = diffusion_kwargs.pop("beta_schedule")
+    # beta_schedule = diffusion_kwargs.pop("beta_schedule")
+    beta_schedule = "linear"
     beta_start = diffusion_kwargs.pop("beta_start")
     beta_end = diffusion_kwargs.pop("beta_end")
     num_diffusion_timesteps = diffusion_kwargs.pop("timesteps")
@@ -143,7 +144,7 @@ def main():
     )
     parser.add_argument("--dataset", choices=DATASET_DICT.keys(), default="cifar10")
     parser.add_argument("--batch-size", default=128, type=int)
-    parser.add_argument("--total-size", default=50, type=int)
+    parser.add_argument("--total-size", default=1000, type=int)
     parser.add_argument("--config-dir", default="./configs", type=str)
     parser.add_argument("--chkpt-dir", default="./chkpts", type=str)
     parser.add_argument("--chkpt-path", default="", type=str)
