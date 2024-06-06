@@ -143,7 +143,7 @@ def main():
     )
     parser.add_argument("--dataset", choices=DATASET_DICT.keys(), default="cifar10")
     parser.add_argument("--batch-size", default=128, type=int)
-    parser.add_argument("--total-size", default=50000, type=int)
+    parser.add_argument("--total-size", default=50, type=int)
     parser.add_argument("--config-dir", default="./configs", type=str)
     parser.add_argument("--chkpt-dir", default="./chkpts", type=str)
     parser.add_argument("--chkpt-path", default="", type=str)
