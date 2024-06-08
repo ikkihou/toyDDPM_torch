@@ -15,7 +15,7 @@ if __name__ == "__main__":
 
     parser = ArgumentParser()
 
-    parser.add_argument("--root", default="~/datasets", type=str)
+    parser.add_argument("--root", default="./datasets", type=str)
     parser.add_argument("--dataset", choices=DATASET_DICT.keys(), default="cifar10")
     parser.add_argument("--eval-batch-size", default=512, type=int)
     parser.add_argument("--eval-total-size", default=50000, type=int)

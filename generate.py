@@ -40,7 +40,7 @@ def generate(rank, args, counter=0):
 
     diffusion_kwargs = meta_config["diffusion"]
     # beta_schedule = diffusion_kwargs.pop("beta_schedule")
-    beta_schedule = "linear"
+    beta_schedule = args.beta_schedule
     beta_start = diffusion_kwargs.pop("beta_start")
     beta_end = diffusion_kwargs.pop("beta_end")
     num_diffusion_timesteps = diffusion_kwargs.pop("timesteps")
@@ -143,6 +143,18 @@ def main():
         "--config-path", type=str, help="path to the configuration file"
     )
     parser.add_argument("--dataset", choices=DATASET_DICT.keys(), default="cifar10")
+    parser.add_argument(
+        "--beta-schedule",
+        choices=[
+            "quad",
+            "linear",
+            "warmup10",
+            "warmup50",
+            "jsd",
+            "stairs",
+        ],
+        default="linear",
+    )
     parser.add_argument("--batch-size", default=128, type=int)
     parser.add_argument("--total-size", default=1000, type=int)
     parser.add_argument("--config-dir", default="./configs", type=str)
