@@ -1,6 +1,13 @@
 import math
 import torch
-from .functions import normal_kl, discretized_gaussian_loglik, flat_mean
+import numpy as np
+from .functions import (
+    normal_kl,
+    discretized_gaussian_loglik,
+    flat_mean,
+    get_piecewise_linear_schedule,
+    adaptive_slope,
+)
 
 
 def _warmup_beta(beta_start, beta_end, timesteps, warmup_frac, dtype):
@@ -8,6 +15,38 @@ def _warmup_beta(beta_start, beta_end, timesteps, warmup_frac, dtype):
     warmup_time = int(timesteps * warmup_frac)
     betas[:warmup_time] = torch.linspace(beta_start, beta_end, warmup_time, dtype=dtype)
     return betas
+
+
+def f(x, a, b, c):
+    return a * x**2 + b * x + c
+
+
+def get_quad_fun(beta_start, beta_end, timesteps):
+    points = np.array([(1, beta_start), (500, 0.99), (timesteps, beta_end)])
+
+    # 提取 x 和 y 值
+    x_coords = points[:, 0]
+    y_coords = points[:, 1]
+
+    # 构造矩阵 A 和向量 B
+    A = np.vstack([x_coords**2, x_coords, np.ones(len(x_coords))]).T
+    B = y_coords
+
+    # 使用 numpy 的 lstsq 解线性方程组 Ax = B
+    coefficients = np.linalg.lstsq(A, B, rcond=None)[0]
+    a, b, c = coefficients
+
+    print(f"a = {a}, b = {b}, c = {c}")
+
+    # 生成 x 的值
+    x = np.linspace(1, 1000, num=1000)
+
+    def f(x):
+        return a * x**2 + b * x + c
+
+    # 计算对应的 y 值
+    y = f(x)
+    return y
 
 
 def get_beta_schedule(
@@ -25,20 +64,17 @@ def get_beta_schedule(
         betas = _warmup_beta(beta_start, beta_end, timesteps, 0.5, dtype=dtype)
     elif beta_schedule == "const":
         betas = beta_end * torch.ones(timesteps, dtype=dtype)
-    elif beta_schedule == "jsd":  # 1/T, 1/(T-1), 1/(T-2), ..., 1
+    elif beta_schedule == "jsd":
         betas = 1.0 / torch.linspace(timesteps, 1, timesteps, dtype=dtype)
+    elif beta_schedule == "arch":
+        y = get_quad_fun(beta_start, beta_end, timesteps)
+        betas = torch.tensor(y, dtype=dtype)
     elif beta_schedule == "stairs":
-        step_intervals = 10
-        steps = timesteps // step_intervals
-        betas = torch.zeros(timesteps, dtype=dtype)
-        for i in range(step_intervals):
-            start = i * steps
-            end = (i + 1) * steps
-            betas[start:end] = beta_start + (beta_end - beta_start) * (
-                i / step_intervals
-            )
-        if timesteps % step_intervals != 0:
-            betas[end:] = beta_end
+        start = (1, beta_start)
+        end = (timesteps, beta_end)
+        betas = get_piecewise_linear_schedule(
+            start, end, 100, adaptive_slope, timesteps
+        )
     else:
         raise NotImplementedError(beta_schedule)
     assert betas.shape == (timesteps,)

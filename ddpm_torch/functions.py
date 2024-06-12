@@ -8,7 +8,9 @@ DEFAULT_DTYPE = torch.float32
 
 
 @torch.jit.script
-def get_timestep_embedding(timesteps, embed_dim: int, dtype: torch.dtype = DEFAULT_DTYPE):
+def get_timestep_embedding(
+    timesteps, embed_dim: int, dtype: torch.dtype = DEFAULT_DTYPE
+):
     """
     Adapted from fairseq/fairseq/modules/sinusoidal_positional_embedding.py
     The implementation is slightly different from the decription in Section 3.5 of [1]
@@ -17,7 +19,9 @@ def get_timestep_embedding(timesteps, embed_dim: int, dtype: torch.dtype = DEFAU
     """
     half_dim = embed_dim // 2
     embed = math.log(10000) / (half_dim - 1)
-    embed = torch.exp(-torch.arange(half_dim, dtype=dtype, device=timesteps.device) * embed)
+    embed = torch.exp(
+        -torch.arange(half_dim, dtype=dtype, device=timesteps.device) * embed
+    )
     embed = torch.outer(timesteps.ravel().to(dtype), embed)
     embed = torch.cat([torch.sin(embed), torch.cos(embed)], dim=1)
     if embed_dim % 2 == 1:
@@ -29,9 +33,12 @@ def get_timestep_embedding(timesteps, embed_dim: int, dtype: torch.dtype = DEFAU
 @torch.jit.script
 def normal_kl(mean1, logvar1, mean2, logvar2):
     diff_logvar = logvar1 - logvar2
-    kl = (-1.0 - diff_logvar).add(
-        (mean1 - mean2).pow(2) * torch.exp(-logvar2)).add(
-        torch.exp(diff_logvar)).mul(0.5)
+    kl = (
+        (-1.0 - diff_logvar)
+        .add((mean1 - mean2).pow(2) * torch.exp(-logvar2))
+        .add(torch.exp(diff_logvar))
+        .mul(0.5)
+    )
     return kl
 
 
@@ -42,13 +49,20 @@ def approx_std_normal_cdf(x):
     Page, E. “Approximations to the Cumulative Normal Function and Its Inverse for Use on a Pocket Calculator.”
      Applied Statistics 26.1 (1977): 75–76. Web.
     """
-    return 0.5 * (1. + torch.tanh(math.sqrt(2. / math.pi) * (x + 0.044715 * torch.pow(x, 3))))
+    return 0.5 * (
+        1.0 + torch.tanh(math.sqrt(2.0 / math.pi) * (x + 0.044715 * torch.pow(x, 3)))
+    )
 
 
 @torch.jit.script
 def discretized_gaussian_loglik(
-        x, means, log_scale, precision: float = 1./255,
-        cutoff: Union[float, Tuple[float, float]] = (-0.999, 0.999), tol: float = 1e-12):
+    x,
+    means,
+    log_scale,
+    precision: float = 1.0 / 255,
+    cutoff: Union[float, Tuple[float, float]] = (-0.999, 0.999),
+    tol: float = 1e-12,
+):
     if isinstance(cutoff, float):
         cutoff = (-cutoff, cutoff)
     # Assumes data is integers [0, 255] rescaled to [-1, 1]
@@ -56,10 +70,16 @@ def discretized_gaussian_loglik(
     inv_stdv = torch.exp(-log_scale)
     upper = inv_stdv * (x_centered + precision)
     cdf_upper = torch.where(
-        x > cutoff[1], torch.as_tensor(1, dtype=torch.float32, device=x.device), approx_std_normal_cdf(upper))
+        x > cutoff[1],
+        torch.as_tensor(1, dtype=torch.float32, device=x.device),
+        approx_std_normal_cdf(upper),
+    )
     lower = inv_stdv * (x_centered - precision)
     cdf_lower = torch.where(
-        x < cutoff[0], torch.as_tensor(0, dtype=torch.float32, device=x.device), approx_std_normal_cdf(lower))
+        x < cutoff[0],
+        torch.as_tensor(0, dtype=torch.float32, device=x.device),
+        approx_std_normal_cdf(lower),
+    )
     log_probs = torch.log(torch.clamp(cdf_upper - cdf_lower - tol, min=0).add(tol))
     return log_probs
 
@@ -87,10 +107,10 @@ def hist2d(data, bins, value_range=None):
         bins = math.floor(math.sqrt(len(data) // 10))
     if value_range is not None:
         if isinstance(value_range, (int, float)):
-            value_range = ((-value_range, value_range), ) * 2
+            value_range = ((-value_range, value_range),) * 2
         if hasattr(value_range, "__iter__"):
             if not hasattr(next(iter(value_range)), "__iter__"):
-                value_range = (value_range, ) * 2
+                value_range = (value_range,) * 2
     x, y = np.split(data, 2, axis=1)
     x, y = x.squeeze(1), y.squeeze(1)
     return np.histogram2d(x, y, bins=bins, range=value_range)[0]
@@ -104,3 +124,83 @@ def flat_mean(x, start_dim=1):
 def flat_sum(x, start_dim=1):
     reduce_dim = [i for i in range(start_dim, x.ndim)]
     return torch.sum(x, dim=reduce_dim)
+
+
+def generate_points_with_adaptive_slope(start, end, dx, slope_function):
+    points = []
+    x, y = start
+
+    # Append the starting point
+    points.append((x, y))
+
+    start_x = start[0]
+    end_x = end[0]
+    end_y = end[1]
+
+    total_distance_x = end_x - start_x
+    total_distance_y = end_y - start[1]
+
+    # Generate points until the x-coordinate of the current point exceeds the end x-coordinate
+    while x < end_x:
+        # Calculate the current slope using the provided slope function
+        current_slope = slope_function(x - start_x, total_distance_x, total_distance_y)
+        dy = dx * current_slope  # Calculate dy based on the current slope
+        x += dx
+        y += dy
+        points.append((x, y))
+
+        # Stop if we've reached or exceeded the end x-coordinate
+        if x >= end_x:
+            break
+
+    # Adjust the last point to be exactly the end point if it overshoots
+    if x > end_x:
+        points[-1] = end
+    else:
+        # If the last point does not match the end point, add the end point
+        points.append(end)
+
+    return points
+
+
+def find_segment(x, points):
+    for i in range(1, len(points)):
+        x0, y0 = points[i - 1]
+        x1, y1 = points[i]
+        if x0 <= x < x1:
+            return i - 1, x0, y0, x1, y1
+    return len(points) - 2, points[-2][0], points[-2][1], points[-1][0], points[-1][1]
+
+
+def compute_y_values(points, x_values):
+    y_values = []
+    for x in x_values:
+        segment_index, x0, y0, x1, y1 = find_segment(x, points)
+        slope = (y1 - y0) / (x1 - x0)
+        y = slope * (x - x0) + y0
+        y_values.append(y)
+    return y_values
+
+
+def get_piecewise_linear_schedule(
+    start, end, dx, slope_function, timesteps, dtype=torch.float64
+):
+    # Generate points
+    points = generate_points_with_adaptive_slope(start, end, dx, slope_function)
+
+    # Generate x values
+    x_values = range(1, timesteps + 1)
+
+    # Compute y values for each x in x_values
+    y_values = compute_y_values(points, x_values)
+
+    # Convert y_values to a torch tensor
+    betas = torch.tensor(y_values, dtype=dtype)
+
+    return betas
+
+
+def adaptive_slope(x, total_distance_x, total_distance_y):
+    k = 0.00000006
+    initial_slope = 0.01 * total_distance_y / total_distance_x
+    return initial_slope + k * ((x / total_distance_x) ** 2) * total_distance_x
