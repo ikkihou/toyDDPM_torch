@@ -22,7 +22,13 @@ def f(x, a, b, c):
 
 
 def get_quad_fun(beta_start, beta_end, timesteps):
-    points = np.array([(1, beta_start), (500, 0.99), (timesteps, beta_end)])
+    points = np.array(
+        [
+            (1, beta_start),
+            (470, 0.015),
+            (timesteps, beta_end),
+        ]
+    )
 
     # 提取 x 和 y 值
     x_coords = points[:, 0]
@@ -35,8 +41,6 @@ def get_quad_fun(beta_start, beta_end, timesteps):
     # 使用 numpy 的 lstsq 解线性方程组 Ax = B
     coefficients = np.linalg.lstsq(A, B, rcond=None)[0]
     a, b, c = coefficients
-
-    print(f"a = {a}, b = {b}, c = {c}")
 
     # 生成 x 的值
     x = np.linspace(1, 1000, num=1000)

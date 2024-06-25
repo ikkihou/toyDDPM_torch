@@ -152,6 +152,7 @@ def main():
             "warmup50",
             "jsd",
             "stairs",
+            "arch",
         ],
         default="linear",
     )

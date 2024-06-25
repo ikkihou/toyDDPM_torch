@@ -24,7 +24,7 @@ CHKPT_INDEX=$1
 
 # Use the provided checkpoint index in the loop
 for i in {linear,quad,stairs,arch}; do
-    python generate.py --beta-schedule $i --chkpt-path ./chkpts/cifar10_arch_3/cifar10_arch_3_${CHKPT_INDEX}.pt --use-ddim --subseq-size 100 --suffix _ddim_"$i"_3
+    python eval.py --sample-folder images/eval/cifar10/cifar10_arch_3_${CHKPT_INDEX}_ddim_"$i"_3
 done
 
 # ----------------------------------------
